@@ -166,6 +166,8 @@ The autotuner progress bar (`7/21 [00:03<00:10, 1.40profile/s]`) is normal.
 | Metric | Value |
 |---|---|
 | Available KV cache | **~32.44 GB** |
+| KV cache capacity | **926,683 tokens** |
+| Max concurrency @ 262k ctx | **~3.54×** (3 full-length sequences with headroom) |
 | KV cache dtype | **FP8** (`torch.float8_e4m3fn`) — auto-selected by FlashInfer |
 | GPU memory utilization | 85 % (effective ≈84.4 % with CUDA graph profiling) |
 | Concurrent sequences | 4 max |
