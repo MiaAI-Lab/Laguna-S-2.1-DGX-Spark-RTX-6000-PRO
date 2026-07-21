@@ -4,6 +4,9 @@ Serves **[poolside/Laguna-S-2.1-NVFP4](https://huggingface.co/poolside/Laguna-S-
 
 Runs in Docker on **vLLM 0.25.1**. Designed for the **DGX Spark (NVIDIA GB10, sm_121a)**.
 
+  <a href="https://ko-fi.com/Z8Z3SPLOD" target="_blank" style="display:inline-block;margin:0 8px;vertical-align:middle;"><img src="https://storage.ko-fi.com/cdn/kofi6.png?v=6" alt="Buy Me a Coffee at ko-fi.com" height="28" border="0" style="height:28px;width:auto;vertical-align:middle;border:0;" /></a>
+  <a href="https://x.com/MiaAI_lab" target="_blank" style="display:inline-block;margin:0 8px;vertical-align:middle;"><img src="https://img.shields.io/badge/Follow%20me%20on%20X-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow Mia on X" height="28" style="height:28px;width:auto;vertical-align:middle;border:0;" /></a>
+</p>
 ---
 
 ## Hardware Requirements
