@@ -1,4 +1,4 @@
-# Laguna-S-2.1-NVFP4 · vLLM Serving
+# Laguna-S-2.1-NVFP4 · DFlash · vLLM Serving
 
 Serves **[poolside/Laguna-S-2.1-NVFP4](https://huggingface.co/poolside/Laguna-S-2.1-NVFP4)** — a 117.6B-parameter MoE model with NVFP4 quantization (~71 GB) — accelerated by **DFlash speculative decoding** via its paired draft model [`poolside/Laguna-S-2.1-DFlash-NVFP4`](https://huggingface.co/poolside/Laguna-S-2.1-DFlash-NVFP4).
 
