@@ -164,7 +164,7 @@ You will see log output like:
 
 The autotuner progress bar (`7/21 [00:03<00:10, 1.40profile/s]`) is normal.
 
-### KV Cache
+### KV Cache (with DFlash active)
 
 | Metric | Value |
 |---|---|
