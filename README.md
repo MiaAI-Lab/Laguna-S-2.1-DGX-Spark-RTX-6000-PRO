@@ -134,7 +134,7 @@ curl http://localhost:8888/v1/chat/completions \
 | `--reasoning-parser` | `poolside_v1` | |
 | `--default-chat-template-kwargs` | `{"enable_thinking":true}` | Reasoning on by default; clients can disable per request |
 | `--override-generation-config` | `{"temperature":0.7,"top_p":0.95,"top_k":20}` | Recommended sampling defaults; `top_k:20` matches Poolside's eval-certified truncation |
-| `--speculative-config` | `{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":15,"method":"dflash"}` | DFlash with 15 speculative tokens |
+| `--speculative-config` | `{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":7,"method":"dflash"}` | DFlash with 7 speculative tokens |
 
 > **Do not** add `--linear-backend flashinfer_b12x` — it is broken on vLLM 0.25.1 and slower than auto-selected FlashInferCutlass.
 >
@@ -188,7 +188,7 @@ The autotuner progress bar (`7/21 [00:03<00:10, 1.40profile/s]`) is normal.
 
 ## Performance
 
-Decode throughput with DFlash speculative decoding (15 speculative tokens) on DGX Spark (GB10):
+Decode throughput with DFlash speculative decoding (7 speculative tokens) on DGX Spark (GB10):
 
 ![Decode throughput benchmark](bench.png)
 
