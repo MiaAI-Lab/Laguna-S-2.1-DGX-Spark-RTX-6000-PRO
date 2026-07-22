@@ -227,6 +227,7 @@ docker run -d \
     --enable-auto-tool-choice \
     --tool-call-parser poolside_v1 \
     --reasoning-parser poolside_v1 \
+    --default-chat-template-kwargs '{"enable_thinking":true}' \
     --override-generation-config '{"temperature":0.7,"top_p":0.95}' \
     --speculative-config '{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":15,"method":"dflash"}' \
   >/dev/null
