@@ -71,7 +71,7 @@ Launches or manages the vLLM serving container.
 1. Checks `~/.cache/huggingface/hub` for both models; downloads any that are missing (using `hf` → `huggingface-cli` → Docker fallback)
 2. Removes any stale container named `laguna-s-2.1-nvfp4`
 3. Pulls the Docker image (`vllm/vllm-openai:v0.25.1`)
-4. Starts the container with a bootstrap script that installs `flashinfer-python` (if not already in the image) for FP4 kernel support
+4. Starts the container with a bootstrap script that installs the matched FlashInfer nightly trio (when the stock image version differs) for FP4 kernel support, and mounts a persistent FlashInfer JIT cache
 5. Waits for the `/v1/models` endpoint to return HTTP 200
 6. Prints the OpenAI-compatible base URL
 
@@ -123,18 +123,24 @@ curl http://localhost:8888/v1/chat/completions \
 |---|---|---|
 | `--host` / `--port` | `0.0.0.0:8888` | |
 | `--tensor-parallel-size` | `1` | Single GPU (GB10) |
+| `--dtype` | `bfloat16` | Compute dtype for the NVFP4 path |
+| `--attention-backend` | `FLASHINFER` | Locks FlashInfer attention (do not force `flashinfer_b12x`) |
 | `--gpu-memory-utilization` | `0.85` | Leaves margin for JIT + graph capture |
 | `--max-model-len` | `262144` | 256K context window |
 | `--max-num-seqs` | `4` | **Required** — DFlash crashes at the default of 256; 4 is a safe starting point for single-user use |
+| `--max-num-batched-tokens` | `8192` | Higher values (e.g. 16384) can leave no KV blocks |
 | `--enable-auto-tool-choice` | | Structured output / tool calling |
 | `--tool-call-parser` | `poolside_v1` | |
 | `--reasoning-parser` | `poolside_v1` | |
-| `--override-generation-config` | `{"temperature":0.7,"top_p":0.95}` | Recommended sampling defaults; many clients send none |
+| `--default-chat-template-kwargs` | `{"enable_thinking":true}` | Reasoning on by default; clients can disable per request |
+| `--override-generation-config` | `{"temperature":0.7,"top_p":0.95,"top_k":20}` | Recommended sampling defaults; `top_k:20` matches Poolside's eval-certified truncation |
 | `--speculative-config` | `{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":15,"method":"dflash"}` | DFlash with 15 speculative tokens |
 
 > **Do not** add `--linear-backend flashinfer_b12x` — it is broken on vLLM 0.25.1 and slower than auto-selected FlashInferCutlass.
 >
 > **Do not** include `min_p` in `--override-generation-config` — vLLM rejects it under speculative decoding (400 error on every request).
+>
+> KV cache dtype is **FP8** (`torch.float8_e4m3fn`), auto-selected by FlashInfer — no need to pass `--kv-cache-dtype`.
 
 ### Environment Variables
 
@@ -143,6 +149,9 @@ curl http://localhost:8888/v1/chat/completions \
 | `HF_TOKEN` | *(empty)* | HuggingFace token for gated models |
 | `IMAGE` | `vllm/vllm-openai:v0.25.1` | Docker image override |
 | `MAX_JOBS` | `4` | Cap for JIT compilation fan-out (prevents OOM on cold cache) |
+| `NVCC_THREADS` | `2` | Cap nvcc parallelism during FlashInfer JIT |
+| `FLASHINFER_NVCC_THREADS` | `2` | FlashInfer-specific nvcc thread cap |
+| `FLASHINFER_CACHE_DIR` | `~/.cache/flashinfer` | Host path mounted at `/root/.cache/flashinfer` (FlashInfer's default JIT cache path) so compiled kernels persist across restarts |
 
 ---
 
@@ -207,10 +216,10 @@ The Docker image `vllm/vllm-openai:v0.25.1` has x86_64 builds and works on Black
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | `Error in inspecting model architecture 'LagunaForCausalLM'` | Registry subprocess missing `--trust-remote-code` | Set `-e VLLM_TRUST_REMOTE_CODE=1` (already in the Docker run) |
-| `flashinfer-python==0.6.15.dev20260712` not found | Nightly not published on that date | Falls back to PyPI stable automatically |
-| Container exits with `OOM` | JIT fan-out too large | Set `MAX_JOBS=2` or `MAX_JOBS=1` |
+| FlashInfer install fails / version mismatch | Nightly trio unavailable or partial upgrade | Bootstrap fails closed; check network access to `flashinfer.ai` nightlies |
+| Container exits with `OOM` | JIT fan-out too large | Set `MAX_JOBS=2` (and/or `NVCC_THREADS=1`) |
 | `docker: Conflict` error | Stale container | Run `./stop.sh` or `docker rm -f laguna-s-2.1-nvfp4` |
-| Slow first start | JIT + graph capture | Normal; takes ≈15 minutes |
+| Slow first start | JIT + graph capture | Normal; takes ≈15 minutes. Subsequent starts reuse `~/.cache/flashinfer` |
 
 ---
 

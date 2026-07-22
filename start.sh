@@ -17,6 +17,7 @@ HF_HOME="${HOME}/.cache/huggingface"
 PID_FILE="${WORK_DIR}/.vllm.pid"
 LOG_FILE="${WORK_DIR}/.vllm.log"
 BOOTSTRAP_SCRIPT="/tmp/laguna-bootstrap.sh"
+FLASHINFER_CACHE_DIR="${FLASHINFER_CACHE_DIR:-${HOME}/.cache/flashinfer}"
 READY_URL="http://127.0.0.1:${PORT}/v1/models"
 
 # ---- Argument parsing -------------------------------------------------------
@@ -49,10 +50,12 @@ command -v curl   >/dev/null 2>&1 || { echo "FATAL: curl is required";   exit 1;
 # ---- Env exports for FP4 kernel JIT (also passed to container) --------------
 export CUTE_DSL_ARCH="sm_121a"
 export MAX_JOBS="${MAX_JOBS:-4}"
+export NVCC_THREADS="${NVCC_THREADS:-2}"
+export FLASHINFER_NVCC_THREADS="${FLASHINFER_NVCC_THREADS:-2}"
 export PATH="/usr/local/cuda/bin:${PATH}"
 export HF_HOME
 export HF_TOKEN="${HF_TOKEN:-}"
-mkdir -p "${HF_HOME}"
+mkdir -p "${HF_HOME}" "${FLASHINFER_CACHE_DIR}"
 
 is_hf_model_id() { [[ "${1}" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; }
 
@@ -162,12 +165,15 @@ else
   # carries a +cu130 local version and is published under the cu130/
   # sub-index. Without it, kernels JIT-compile from source, which fails on
   # the stock vllm-openai image (no cuBLAS dev headers: cublasLt.h missing).
-  pip install \
+  # --no-deps keeps the stock image's flashinfer-*=0.6.13 requirement from
+  # pulling the trio back down. Install the small companions separately.
+  pip install --upgrade --no-deps \
     "flashinfer-python==${FLASHINFER_VERSION}" \
     "flashinfer-cubin==${FLASHINFER_VERSION}" \
     "flashinfer-jit-cache==${FLASHINFER_VERSION}+cu130" \
     --extra-index-url https://flashinfer.ai/whl/nightly/ \
     --extra-index-url https://flashinfer.ai/whl/nightly/cu130/ \
+    && pip install --upgrade "cuda-tile==1.5.0" "nccl4py==0.3.1" \
     && echo "[bootstrap] Installed flashinfer ${FLASHINFER_VERSION} (python + cubin + jit-cache)" \
     || { echo "[bootstrap] FATAL: flashinfer ${FLASHINFER_VERSION} install failed; refusing to start with mismatched FP4 kernels (draft acceptance collapses)"; exit 1; }
 fi
@@ -186,6 +192,7 @@ fi
 echo "Starting vLLM container for ${MODEL_ID}"
 echo "Image: ${IMAGE}"
 echo "Listening on ${HOST}:${PORT}"
+echo "FlashInfer cache: ${FLASHINFER_CACHE_DIR}"
 echo ""
 
 echo "Pulling ${IMAGE} ..."
@@ -210,27 +217,33 @@ docker run -d \
   -e VLLM_TARGET_DEVICE=cuda \
   -e VLLM_TRUST_REMOTE_CODE=1 \
   -e CUTE_DSL_ARCH=sm_121a \
-  -e MAX_JOBS=4 \
+  -e MAX_JOBS="${MAX_JOBS}" \
+  -e NVCC_THREADS="${NVCC_THREADS}" \
+  -e FLASHINFER_NVCC_THREADS="${FLASHINFER_NVCC_THREADS}" \
   -e "PATH=/usr/local/cuda/bin:${PATH}" \
   -e HF_HOME=/root/.cache/huggingface \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   -v "${BOOTSTRAP_SCRIPT}:/bootstrap.sh:ro" \
   -v "${HF_HOME}:/root/.cache/huggingface" \
+  -v "${FLASHINFER_CACHE_DIR}:/root/.cache/flashinfer" \
   -v "${WORK_DIR}:/workspace" \
   "${IMAGE}" \
   "${MODEL_ID}" \
     --host "${HOST}" \
     --port "${PORT}" \
     --tensor-parallel-size 1 \
+    --dtype bfloat16 \
+    --attention-backend FLASHINFER \
     --trust-remote-code \
     --gpu-memory-utilization 0.85 \
     --max-model-len 262144 \
     --max-num-seqs 4 \
+    --max-num-batched-tokens 8192 \
     --enable-auto-tool-choice \
     --tool-call-parser poolside_v1 \
     --reasoning-parser poolside_v1 \
     --default-chat-template-kwargs '{"enable_thinking":true}' \
-    --override-generation-config '{"temperature":0.7,"top_p":0.95}' \
+    --override-generation-config '{"temperature":0.7,"top_p":0.95,"top_k":20}' \
     --speculative-config '{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":15,"method":"dflash"}' \
   >/dev/null
 
