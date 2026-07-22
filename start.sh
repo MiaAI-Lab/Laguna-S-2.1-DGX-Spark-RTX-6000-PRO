@@ -151,23 +151,25 @@ fi
 cat > "${BOOTSTRAP_SCRIPT}" << 'BOOTSTRAP'
 #!/bin/bash
 set -e
-if python3 -c "import flashinfer" 2>/dev/null; then
-  echo "[bootstrap] FlashInfer already installed in image"
+FLASHINFER_VERSION="0.6.15.dev20260712"
+INSTALLED="$(python3 -c 'import flashinfer; print(flashinfer.__version__)' 2>/dev/null || true)"
+if [[ "${INSTALLED}" == "${FLASHINFER_VERSION}" ]]; then
+  echo "[bootstrap] FlashInfer ${FLASHINFER_VERSION} already installed"
 else
-  echo "[bootstrap] Installing FlashInfer for FP4 support ..."
-  # Try the nightly index first, fall back to PyPI stable.
-  if pip install \
-    flashinfer-python==0.6.15.dev20260712 \
+  echo "[bootstrap] Installing FlashInfer ${FLASHINFER_VERSION} for FP4 support (found: ${INSTALLED:-none}) ..."
+  # flashinfer-python, flashinfer-cubin and flashinfer-jit-cache must all be
+  # the SAME version or flashinfer refuses to import. The jit-cache wheel
+  # carries a +cu130 local version and is published under the cu130/
+  # sub-index. Without it, kernels JIT-compile from source, which fails on
+  # the stock vllm-openai image (no cuBLAS dev headers: cublasLt.h missing).
+  pip install \
+    "flashinfer-python==${FLASHINFER_VERSION}" \
+    "flashinfer-cubin==${FLASHINFER_VERSION}" \
+    "flashinfer-jit-cache==${FLASHINFER_VERSION}+cu130" \
     --extra-index-url https://flashinfer.ai/whl/nightly/ \
-  ; then
-    echo "[bootstrap] Installed flashinfer nightly"
-  elif pip install \
-    flashinfer-python>=0.6.15 \
-  ; then
-    echo "[bootstrap] Installed flashinfer stable"
-  else
-    echo "[bootstrap] WARNING: flashinfer install skipped — vLLM may fall back gracefully"
-  fi
+    --extra-index-url https://flashinfer.ai/whl/nightly/cu130/ \
+    && echo "[bootstrap] Installed flashinfer ${FLASHINFER_VERSION} (python + cubin + jit-cache)" \
+    || { echo "[bootstrap] FATAL: flashinfer ${FLASHINFER_VERSION} install failed; refusing to start with mismatched FP4 kernels (draft acceptance collapses)"; exit 1; }
 fi
 echo "[bootstrap] Starting vLLM ..."
 exec vllm serve "$@"
